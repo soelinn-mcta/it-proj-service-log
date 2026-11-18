@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IT Asset Service QR Scanner</title>
+  <title>Projector Service QR Scanner</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; margin: 0; padding: 16px; color: #1f2937; }
@@ -27,17 +27,17 @@
 </head>
 <body>
   <div class="card">
-    <h2 id="pageTitle">Projector Repair Log</h2>
+    <h2>Projector Repair Log</h2>
     <div id="statusBox" class="status"></div>
 
     <div id="reader"></div>
     <button type="button" id="rescanBtn" class="btn-secondary" style="display:none;" onclick="startScanner()">Scan Another QR</button>
 
     <form id="serviceForm">
-      <!-- Auto-filled & Locked Fields from Asset_ID -->
+      <!-- Auto-filled & Locked Fields from Asset_ID Sheet -->
       <div class="field">
         <label>Asset Name (From QR)</label>
-        <input type="text" id="assetName" readonly required placeholder="Scan QR code above...">
+        <input type="text" id="assetName" readonly required placeholder="Scan projector QR above...">
       </div>
 
       <div class="grid-2">
@@ -79,9 +79,11 @@
         <label>Service Type *</label>
         <select id="serviceType" required>
           <option value="" disabled selected>Select service type...</option>
-          <option value="Cleaniness & Servicing">Cleaniness & Servicing</option>
+          <option value="Projector LAMP Replacement">Projector LAMP Replacement</option>
           <option value="Projector LEN Replacement">Projector LEN Replacement</option>
-          <option value="Others">Others</option>
+          <option value="Power Supply Replacement">Power Supply Replacement</option>
+          <option value="Board Replacement">Board Replacement</option>
+          <option value="Servicing">Servicing</option>
         </select>
       </div>
 
@@ -95,17 +97,12 @@
         <textarea id="remark" rows="2" placeholder="Optional remarks..."></textarea>
       </div>
 
-      <button type="submit" id="submitBtn" disabled>Submit Repair Log</button>
+      <button type="submit" id="submitBtn" disabled>Submit Projector Repair Log</button>
     </form>
   </div>
 
   <script>
     const WEBHOOK_URL = 'https://hook.us2.make.com/g1i8uavahn4fa5e8588vhmyztve237l4';
-
-    const params = new URLSearchParams(window.location.search);
-    const assetType = params.get('type') || 'Projector';
-    document.getElementById('pageTitle').textContent = `${assetType} Repair Log`;
-
     let html5QrCode;
 
     function showStatus(msg, type) {
@@ -171,7 +168,6 @@
 
       const body = new URLSearchParams({
         action: 'submit',
-        assetType: assetType,
         assetName: document.getElementById('assetName').value,
         brand: document.getElementById('brand').value,
         model: document.getElementById('model').value,
@@ -191,7 +187,7 @@
         if (result.success) {
           showStatus(`Saved to ProjectorRepairedLog_AutoEntry (Date: ${result.loggedDate}).`, 'success');
           document.getElementById('serviceForm').reset();
-          btn.textContent = 'Submit Repair Log';
+          btn.textContent = 'Submit Projector Repair Log';
           startScanner();
         } else {
           throw new Error('Submission failed');
@@ -199,7 +195,7 @@
       } catch (err) {
         showStatus('Error saving record. Please try again.', 'error');
         btn.disabled = false;
-        btn.textContent = 'Submit Repair Log';
+        btn.textContent = 'Submit Projector Repair Log';
       }
     });
 
