@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IT Asset Service QR Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; margin: 0; padding: 16px; color: #1f2937; }
+    .card { max-width: 480px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+    h2 { margin-top: 0; font-size: 1.25rem; color: #0f172a; }
+    #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+    .field { margin-bottom: 14px; }
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; color: #374151; }
+    .hint { font-weight: 400; color: #6b7280; font-size: 0.78rem; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 1rem; box-sizing: border-box; background: #fff; }
+    input[readonly] { background-color: #e5e7eb; color: #374151; cursor: not-allowed; font-weight: 600; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    button { width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    button:disabled { background: #93c5fd; cursor: not-allowed; }
+    .btn-secondary { background: #4b5563; margin-bottom: 12px; }
+    .status { padding: 10px; border-radius: 8px; margin-bottom: 12px; font-size: 0.9rem; display: none; }
+    .status.error { background: #fee2e2; color: #991b1b; display: block; }
+    .status.success { background: #dcfce7; color: #166534; display: block; }
+    .status.info { background: #e0f2fe; color: #075985; display: block; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2 id="pageTitle">Projector Repair Log</h2>
+    <div id="statusBox" class="status"></div>
+
+    <div id="reader"></div>
+    <button type="button" id="rescanBtn" class="btn-secondary" style="display:none;" onclick="startScanner()">Scan Another QR</button>
+
+    <form id="serviceForm">
+      <!-- Auto-filled & Locked Fields from Asset_ID -->
+      <div class="field">
+        <label>Asset Name (From QR)</label>
+        <input type="text" id="assetName" readonly required placeholder="Scan QR code above...">
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label>Brand</label>
+          <input type="text" id="brand" readonly required>
+        </div>
+        <div class="field">
+          <label>Model</label>
+          <input type="text" id="model" readonly required>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Serial No</label>
+        <input type="text" id="serialNo" readonly required>
+      </div>
+
+      <hr style="border:0; border-top:1px solid #e5e7eb; margin:16px 0;">
+
+      <!-- Manual Entry Fields -->
+      <div class="grid-2">
+        <div class="field">
+          <label>Room No *</label>
+          <input type="text" id="roomNo" required placeholder="e.g., S-105">
+        </div>
+        <div class="field">
+          <label>PO No</label>
+          <input type="text" id="poNo" placeholder="e.g., IT2601_006">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Date <span class="hint">(Leave blank for auto Myanmar time)</span></label>
+        <input type="date" id="date">
+      </div>
+
+      <div class="field">
+        <label>Service Type *</label>
+        <select id="serviceType" required>
+          <option value="" disabled selected>Select service type...</option>
+          <option value="Cleaniness & Servicing">Cleaniness & Servicing</option>
+          <option value="Projector LEN Replacement">Projector LEN Replacement</option>
+          <option value="Others">Others</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Service Charges (MMK)</label>
+        <input type="number" id="serviceCharges" min="0" step="1" placeholder="e.g., 280000">
+      </div>
+
+      <div class="field">
+        <label>Remark</label>
+        <textarea id="remark" rows="2" placeholder="Optional remarks..."></textarea>
+      </div>
+
+      <button type="submit" id="submitBtn" disabled>Submit Repair Log</button>
+    </form>
+  </div>
+
+  <script>
+    const WEBHOOK_URL = 'https://hook.us2.make.com/g1i8uavahn4fa5e8588vhmyztve237l4';
+
+    const params = new URLSearchParams(window.location.search);
+    const assetType = params.get('type') || 'Projector';
+    document.getElementById('pageTitle').textContent = `${assetType} Repair Log`;
+
+    let html5QrCode;
+
+    function showStatus(msg, type) {
+      const box = document.getElementById('statusBox');
+      box.textContent = msg;
+      box.className = 'status ' + type;
+    }
+
+    async function onScanSuccess(decodedText) {
+      const scannedAssetName = decodedText.trim();
+      await html5QrCode.stop();
+      document.getElementById('reader').style.display = 'none';
+      document.getElementById('rescanBtn').style.display = 'block';
+
+      document.getElementById('assetName').value = scannedAssetName;
+      showStatus(`Matching "${scannedAssetName}" in Asset_ID sheet...`, 'info');
+
+      try {
+        const body = new URLSearchParams({
+          action: 'lookup',
+          assetName: scannedAssetName
+        });
+
+        const res = await fetch(WEBHOOK_URL, { method: 'POST', body });
+        const data = await res.json();
+
+        if (data.found) {
+          document.getElementById('assetName').value = data.assetName;
+          document.getElementById('brand').value = data.brand;
+          document.getElementById('model').value = data.model;
+          document.getElementById('serialNo').value = data.serialNo;
+          document.getElementById('submitBtn').disabled = false;
+          showStatus(`Matched: ${data.assetName} (${data.brand} ${data.model})`, 'success');
+        } else {
+          document.getElementById('brand').value = '';
+          document.getElementById('model').value = '';
+          document.getElementById('serialNo').value = '';
+          showStatus(`"${scannedAssetName}" was not found in Asset_ID sheet.`, 'error');
+        }
+      } catch (err) {
+        showStatus('Connection error. Make sure your Make.com scenario is ON.', 'error');
+      }
+    }
+
+    function startScanner() {
+      document.getElementById('reader').style.display = 'block';
+      document.getElementById('rescanBtn').style.display = 'none';
+      document.getElementById('submitBtn').disabled = true;
+
+      html5QrCode = new Html5Qrcode("reader");
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
+        onScanSuccess
+      ).catch(err => showStatus('Camera permission required: ' + err, 'error'));
+    }
+
+    document.getElementById('serviceForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      const body = new URLSearchParams({
+        action: 'submit',
+        assetType: assetType,
+        assetName: document.getElementById('assetName').value,
+        brand: document.getElementById('brand').value,
+        model: document.getElementById('model').value,
+        serialNo: document.getElementById('serialNo').value,
+        roomNo: document.getElementById('roomNo').value.trim(),
+        poNo: document.getElementById('poNo').value.trim(),
+        date: document.getElementById('date').value,
+        serviceType: document.getElementById('serviceType').value,
+        serviceCharges: document.getElementById('serviceCharges').value,
+        remark: document.getElementById('remark').value.trim()
+      });
+
+      try {
+        const res = await fetch(WEBHOOK_URL, { method: 'POST', body });
+        const result = await res.json();
+
+        if (result.success) {
+          showStatus(`Saved to ProjectorRepairedLog_AutoEntry (Date: ${result.loggedDate}).`, 'success');
+          document.getElementById('serviceForm').reset();
+          btn.textContent = 'Submit Repair Log';
+          startScanner();
+        } else {
+          throw new Error('Submission failed');
+        }
+      } catch (err) {
+        showStatus('Error saving record. Please try again.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Submit Repair Log';
+      }
+    });
+
+    window.onload = startScanner;
+  </script>
+</body>
+</html>
