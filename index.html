@@ -510,7 +510,6 @@
           const fetchedRoom = (data.roomNo && String(data.roomNo).trim() !== '') ? String(data.roomNo).trim() : '';
           const fetchedCampus = (data.campusName && String(data.campusName).trim() !== '') ? String(data.campusName).trim() : '';
 
-          // Auto-fill Room No (editable) & Campus (read-only)
           document.getElementById('roomNo').value = fetchedRoom;
           document.getElementById('campus').value = fetchedCampus;
 
@@ -640,6 +639,15 @@
       const newRoomVal = document.getElementById('newRoomInput').value.trim();
       const newCampusVal = document.getElementById('newCampusSelect').value;
 
+      // Build relocation history log string before overwriting current room/campus
+      const oldRoomStr = (currentAssetRoom && currentAssetRoom !== 'Not assigned' && currentAssetRoom !== '-')
+        ? currentAssetRoom
+        : 'Unassigned';
+      const oldCampusStr = (currentAssetCampus && currentAssetCampus !== 'Not assigned' && currentAssetCampus !== '-')
+        ? currentAssetCampus
+        : 'Unassigned';
+      const relocationLog = `${oldRoomStr}, ${oldCampusStr} to ${newRoomVal}, ${newCampusVal}`;
+
       const updateBtn = document.getElementById('confirmRoomUpdateBtn');
       const banner = document.getElementById('roomResultBanner');
       updateBtn.disabled = true;
@@ -650,7 +658,8 @@
         action: 'updateRoom',
         assetName: assetNameVal,
         newRoom: newRoomVal,
-        newCampus: newCampusVal
+        newCampus: newCampusVal,
+        relocationLog: relocationLog
       });
 
       try {
@@ -664,7 +673,6 @@
           document.getElementById('currentRoomDisplay').textContent = newRoomVal;
           document.getElementById('currentCampusDisplay').textContent = newCampusVal;
 
-          // Keep main form's Room No & Campus synced with the newly updated values
           document.getElementById('roomNo').value = newRoomVal;
           document.getElementById('campus').value = newCampusVal;
 
