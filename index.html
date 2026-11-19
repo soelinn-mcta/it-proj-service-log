@@ -20,14 +20,33 @@
     button { width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 8px; }
     button:disabled { background: #93c5fd; cursor: not-allowed; }
     .btn-secondary { background: #4b5563; margin-bottom: 12px; }
-    .btn-history {
-      background: #0f766e;
+    .action-btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
       margin-top: 2px;
       margin-bottom: 4px;
+    }
+    .btn-history {
+      background: #0f766e;
+      margin-top: 0;
+      font-size: 0.92rem;
+      padding: 11px 8px;
     }
     .btn-history:disabled {
       background: #99f6e4;
       color: #115e59;
+      opacity: 0.65;
+    }
+    .btn-update-room {
+      background: #d97706;
+      margin-top: 0;
+      font-size: 0.92rem;
+      padding: 11px 8px;
+    }
+    .btn-update-room:disabled {
+      background: #fde68a;
+      color: #92400e;
       opacity: 0.65;
     }
     .status { padding: 10px; border-radius: 8px; margin-bottom: 12px; font-size: 0.9rem; display: none; }
@@ -183,6 +202,92 @@
       background: #334155;
       margin-top: 0;
     }
+
+    /* Update Room Pop-up Dialog */
+    .room-modal-box {
+      background: #fff;
+      width: 100%;
+      max-width: 400px;
+      border-radius: 14px;
+      overflow: hidden;
+      text-align: left;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+      animation: popIn 0.18s ease-out;
+    }
+    .room-modal-body {
+      padding: 16px 18px 18px;
+    }
+    .current-location-card {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      font-size: 0.9rem;
+    }
+    .current-location-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .current-location-row:last-child {
+      margin-bottom: 0;
+    }
+    .current-location-label {
+      color: #475569;
+      font-weight: 600;
+    }
+    .current-location-val {
+      color: #0f172a;
+      font-weight: 700;
+    }
+    .room-result-banner {
+      display: none;
+      text-align: center;
+      padding: 14px 12px;
+      border-radius: 10px;
+      margin-bottom: 12px;
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+    .room-result-banner.completed {
+      display: block;
+      background: #dcfce7;
+      border: 1px solid #86efac;
+      color: #166534;
+    }
+    .room-result-banner.error {
+      display: block;
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+      font-size: 0.9rem;
+    }
+    .room-countdown-sub {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-top: 4px;
+      color: #15803d;
+    }
+    .room-btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .btn-room-cancel {
+      background: #475569;
+      margin-top: 0;
+    }
+    .btn-room-save {
+      background: #d97706;
+      margin-top: 0;
+    }
+    .btn-room-save:disabled {
+      background: #fcd34d;
+      color: #78350f;
+    }
   </style>
 </head>
 <body>
@@ -216,8 +321,11 @@
         <input type="text" id="serialNo" readonly required>
       </div>
 
-      <!-- Service History Button -->
-      <button type="button" id="historyBtn" class="btn-history" disabled onclick="openServiceHistory()">📋 Service History</button>
+      <!-- Service History & Update Room Buttons -->
+      <div class="action-btn-row">
+        <button type="button" id="historyBtn" class="btn-history" disabled onclick="openServiceHistory()">📋 Service History</button>
+        <button type="button" id="updateRoomBtn" class="btn-update-room" disabled onclick="openUpdateRoomModal()">📍 Update Room</button>
+      </div>
 
       <hr style="border:0; border-top:1px solid #e5e7eb; margin:16px 0;">
 
@@ -293,10 +401,59 @@
     </div>
   </div>
 
+  <!-- Update Room & Campus Pop-up Dialog -->
+  <div id="roomModal" class="modal-overlay">
+    <div class="room-modal-box">
+      <div class="history-header">
+        <h3>Update Room & Campus</h3>
+        <div id="roomModalSubtitle" class="history-subtitle"></div>
+      </div>
+      <div class="room-modal-body">
+        <div class="current-location-card">
+          <div class="current-location-row">
+            <span class="current-location-label">Current Room No:</span>
+            <span id="currentRoomDisplay" class="current-location-val">-</span>
+          </div>
+          <div class="current-location-row">
+            <span class="current-location-label">Current Campus:</span>
+            <span id="currentCampusDisplay" class="current-location-val">-</span>
+          </div>
+        </div>
+
+        <div id="roomResultBanner" class="room-result-banner"></div>
+
+        <form id="updateRoomForm">
+          <div class="field">
+            <label>New Room No *</label>
+            <input type="text" id="newRoomInput" required placeholder="e.g., S-204">
+          </div>
+
+          <div class="field">
+            <label>Campus Location *</label>
+            <select id="newCampusSelect" required>
+              <option value="" disabled selected>Select campus...</option>
+              <option value="Main Campus">Main Campus</option>
+              <option value="Super City">Super City</option>
+            </select>
+          </div>
+
+          <div class="room-btn-row">
+            <button type="button" class="btn-room-cancel" onclick="closeUpdateRoomModal()">Close</button>
+            <button type="submit" id="confirmRoomUpdateBtn" class="btn-room-save">Update</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <script>
     const WEBHOOK_URL = 'https://hook.us2.make.com/g1i8uavahn4fa5e8588vhmyztve237l4';
     let html5QrCode;
     let isProcessingScan = false;
+    let currentAssetRoom = '-';
+    let currentAssetCampus = '-';
+    let roomAutoCloseTimer = null;
+    let roomCountdownInterval = null;
 
     if (window.Telegram && window.Telegram.WebApp) {
       window.Telegram.WebApp.ready();
@@ -344,14 +501,22 @@
           document.getElementById('brand').value = data.brand;
           document.getElementById('model').value = data.model;
           document.getElementById('serialNo').value = data.serialNo;
+
+          currentAssetRoom = (data.roomNo && String(data.roomNo).trim() !== '') ? String(data.roomNo).trim() : 'Not assigned';
+          currentAssetCampus = (data.campusName && String(data.campusName).trim() !== '') ? String(data.campusName).trim() : 'Not assigned';
+
           document.getElementById('submitBtn').disabled = false;
           document.getElementById('historyBtn').disabled = false;
+          document.getElementById('updateRoomBtn').disabled = false;
           showStatus(`Name: ${data.assetName} (${data.brand} ${data.model})`, 'success');
         } else {
           document.getElementById('brand').value = '';
           document.getElementById('model').value = '';
           document.getElementById('serialNo').value = '';
+          currentAssetRoom = '-';
+          currentAssetCampus = '-';
           document.getElementById('historyBtn').disabled = true;
+          document.getElementById('updateRoomBtn').disabled = true;
           showStatus(`"${scannedAssetName}" was not found in Database.`, 'error');
         }
       } catch (err) {
@@ -367,6 +532,7 @@
       document.getElementById('rescanBtn').style.display = 'none';
       document.getElementById('submitBtn').disabled = true;
       document.getElementById('historyBtn').disabled = true;
+      document.getElementById('updateRoomBtn').disabled = true;
 
       html5QrCode = new Html5Qrcode("reader");
       html5QrCode.start(
@@ -382,12 +548,15 @@
       document.getElementById('brand').value = '';
       document.getElementById('model').value = '';
       document.getElementById('serialNo').value = '';
+      currentAssetRoom = '-';
+      currentAssetCampus = '-';
       hideStatus();
 
       const btn = document.getElementById('submitBtn');
       btn.disabled = true;
       btn.textContent = 'Submit';
       document.getElementById('historyBtn').disabled = true;
+      document.getElementById('updateRoomBtn').disabled = true;
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
       startScanner();
@@ -407,6 +576,105 @@
     function closeHistoryModal() {
       document.getElementById('historyModal').style.display = 'none';
     }
+
+    function clearRoomTimers() {
+      if (roomAutoCloseTimer) {
+        clearTimeout(roomAutoCloseTimer);
+        roomAutoCloseTimer = null;
+      }
+      if (roomCountdownInterval) {
+        clearInterval(roomCountdownInterval);
+        roomCountdownInterval = null;
+      }
+    }
+
+    function openUpdateRoomModal() {
+      const assetNameVal = document.getElementById('assetName').value.trim();
+      const brandVal = document.getElementById('brand').value.trim();
+      const modelVal = document.getElementById('model').value.trim();
+      if (!assetNameVal) return;
+
+      clearRoomTimers();
+      document.getElementById('roomModalSubtitle').textContent = `${assetNameVal} (${brandVal} ${modelVal})`;
+      document.getElementById('currentRoomDisplay').textContent = currentAssetRoom;
+      document.getElementById('currentCampusDisplay').textContent = currentAssetCampus;
+
+      document.getElementById('updateRoomForm').reset();
+      const banner = document.getElementById('roomResultBanner');
+      banner.className = 'room-result-banner';
+      banner.innerHTML = '';
+
+      const updateBtn = document.getElementById('confirmRoomUpdateBtn');
+      updateBtn.disabled = false;
+      updateBtn.textContent = 'Update';
+
+      document.getElementById('roomModal').style.display = 'flex';
+    }
+
+    function closeUpdateRoomModal() {
+      clearRoomTimers();
+      document.getElementById('roomModal').style.display = 'none';
+    }
+
+    document.getElementById('updateRoomForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearRoomTimers();
+
+      const assetNameVal = document.getElementById('assetName').value.trim();
+      const newRoomVal = document.getElementById('newRoomInput').value.trim();
+      const newCampusVal = document.getElementById('newCampusSelect').value;
+
+      const updateBtn = document.getElementById('confirmRoomUpdateBtn');
+      const banner = document.getElementById('roomResultBanner');
+      updateBtn.disabled = true;
+      updateBtn.textContent = 'Updating...';
+      banner.className = 'room-result-banner';
+
+      const body = new URLSearchParams({
+        action: 'updateRoom',
+        assetName: assetNameVal,
+        newRoom: newRoomVal,
+        newCampus: newCampusVal
+      });
+
+      try {
+        const res = await fetch(WEBHOOK_URL, { method: 'POST', body });
+        const rawText = await res.text();
+        const result = rawText === 'Accepted' ? { success: true } : JSON.parse(rawText);
+
+        if (result.success) {
+          currentAssetRoom = newRoomVal;
+          currentAssetCampus = newCampusVal;
+          document.getElementById('currentRoomDisplay').textContent = newRoomVal;
+          document.getElementById('currentCampusDisplay').textContent = newCampusVal;
+
+          updateBtn.textContent = 'Update';
+
+          let secondsLeft = 5;
+          banner.className = 'room-result-banner completed';
+          banner.innerHTML = `Completed<span class="room-countdown-sub">Closing automatically in ${secondsLeft}s...</span>`;
+
+          roomCountdownInterval = setInterval(() => {
+            secondsLeft -= 1;
+            if (secondsLeft > 0) {
+              const sub = banner.querySelector('.room-countdown-sub');
+              if (sub) sub.textContent = `Closing automatically in ${secondsLeft}s...`;
+            }
+          }, 1000);
+
+          roomAutoCloseTimer = setTimeout(() => {
+            closeUpdateRoomModal();
+          }, 5000);
+        } else {
+          throw new Error('Update failed');
+        }
+      } catch (err) {
+        banner.className = 'room-result-banner error';
+        banner.textContent = 'Error updating room. Please check Make.com scenario.';
+        updateBtn.disabled = false;
+        updateBtn.textContent = 'Update';
+      }
+    });
 
     function escapeHtml(text) {
       const div = document.createElement('div');
