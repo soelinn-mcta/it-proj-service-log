@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Projector Service QR Scanner</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; margin: 0; padding: 16px; color: #1f2937; }
     .card { max-width: 480px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
@@ -23,6 +24,63 @@
     .status.error { background: #fee2e2; color: #991b1b; display: block; }
     .status.success { background: #dcfce7; color: #166534; display: block; }
     .status.info { background: #e0f2fe; color: #075985; display: block; }
+
+    /* Pop-up Modal Styles (Works in Telegram Mini App & Browsers) */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.65);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 9999;
+    }
+    .modal-box {
+      background: #fff;
+      width: 100%;
+      max-width: 360px;
+      border-radius: 14px;
+      padding: 24px 20px;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      animation: popIn 0.18s ease-out;
+    }
+    @keyframes popIn {
+      from { transform: scale(0.92); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .modal-icon {
+      width: 52px;
+      height: 52px;
+      margin: 0 auto 12px;
+      border-radius: 50%;
+      background: #dcfce7;
+      color: #16a34a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: bold;
+    }
+    .modal-title {
+      margin: 0 0 8px;
+      font-size: 1.2rem;
+      color: #0f172a;
+    }
+    .modal-msg {
+      margin: 0 0 18px;
+      font-size: 0.92rem;
+      color: #4b5563;
+      line-height: 1.45;
+    }
+    .modal-close-btn {
+      background: #16a34a;
+      margin-top: 0;
+    }
+    .modal-close-btn:hover {
+      background: #15803d;
+    }
   </style>
 </head>
 <body>
@@ -31,7 +89,7 @@
     <div id="statusBox" class="status"></div>
 
     <div id="reader"></div>
-    <button type="button" id="rescanBtn" class="btn-secondary" style="display:none;" onclick="startScanner()">Scan Another QR</button>
+    <button type="button" id="rescanBtn" class="btn-secondary" style="display:none;" onclick="resetAndScan()">Scan Another QR</button>
 
     <form id="serviceForm">
       <!-- Auto-filled & Locked Fields from Asset_ID Sheet -->
@@ -102,9 +160,26 @@
     </form>
   </div>
 
+  <!-- Success Confirmation Pop-up Modal -->
+  <div id="successModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-icon">✓</div>
+      <h3 class="modal-title">Record Saved!</h3>
+      <p id="modalMessage" class="modal-msg"></p>
+      <button type="button" id="closeModalBtn" class="modal-close-btn" onclick="closeSuccessModal()">Close</button>
+    </div>
+  </div>
+
   <script>
     const WEBHOOK_URL = 'https://hook.us2.make.com/g1i8uavahn4fa5e8588vhmyztve237l4';
     let html5QrCode;
+    let isProcessingScan = false;
+
+    // Expand Telegram Mini App to full height if opened inside Telegram
+    if (window.Telegram && window.Telegram.WebApp) {
+      window.Telegram.WebApp.ready();
+      window.Telegram.WebApp.expand();
+    }
 
     function showStatus(msg, type) {
       const box = document.getElementById('statusBox');
@@ -112,9 +187,21 @@
       box.className = 'status ' + type;
     }
 
+    function hideStatus() {
+      const box = document.getElementById('statusBox');
+      box.textContent = '';
+      box.className = 'status';
+    }
+
     async function onScanSuccess(decodedText) {
+      if (isProcessingScan) return;
+      isProcessingScan = true;
+
       const scannedAssetName = decodedText.trim();
-      await html5QrCode.stop();
+      try {
+        await html5QrCode.stop();
+      } catch (e) {}
+
       document.getElementById('reader').style.display = 'none';
       document.getElementById('rescanBtn').style.display = 'block';
 
@@ -145,10 +232,13 @@
         }
       } catch (err) {
         showStatus('Connection error. Make sure your Make.com scenario is ON.', 'error');
+      } finally {
+        isProcessingScan = false;
       }
     }
 
     function startScanner() {
+      isProcessingScan = false;
       document.getElementById('reader').style.display = 'block';
       document.getElementById('rescanBtn').style.display = 'none';
       document.getElementById('submitBtn').disabled = true;
@@ -161,22 +251,52 @@
       ).catch(err => showStatus('Camera permission required: ' + err, 'error'));
     }
 
+    function resetAndScan() {
+      document.getElementById('serviceForm').reset();
+      document.getElementById('assetName').value = '';
+      document.getElementById('brand').value = '';
+      document.getElementById('model').value = '';
+      document.getElementById('serialNo').value = '';
+      hideStatus();
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Submit Projector Repair Log';
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      startScanner();
+    }
+
+    function showSuccessModal(assetName, serviceType, loggedDate) {
+      document.getElementById('modalMessage').innerHTML =
+        `<strong>${assetName}</strong><br>${serviceType}<br>Logged Date: <strong>${loggedDate}</strong>`;
+      document.getElementById('successModal').style.display = 'flex';
+    }
+
+    function closeSuccessModal() {
+      document.getElementById('successModal').style.display = 'none';
+      resetAndScan();
+    }
+
     document.getElementById('serviceForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
       btn.disabled = true;
       btn.textContent = 'Submitting...';
 
+      const assetNameVal = document.getElementById('assetName').value;
+      const serviceTypeVal = document.getElementById('serviceType').value;
+
       const body = new URLSearchParams({
         action: 'submit',
-        assetName: document.getElementById('assetName').value,
+        assetName: assetNameVal,
         brand: document.getElementById('brand').value,
         model: document.getElementById('model').value,
         serialNo: document.getElementById('serialNo').value,
         roomNo: document.getElementById('roomNo').value.trim(),
         poNo: document.getElementById('poNo').value.trim(),
         date: document.getElementById('date').value,
-        serviceType: document.getElementById('serviceType').value,
+        serviceType: serviceTypeVal,
         serviceCharges: document.getElementById('serviceCharges').value,
         remark: document.getElementById('remark').value.trim()
       });
@@ -186,10 +306,8 @@
         const result = await res.json();
 
         if (result.success) {
-          showStatus(`Saved to ProjectorRepairedLog_AutoEntry (Date: ${result.loggedDate}).`, 'success');
-          document.getElementById('serviceForm').reset();
           btn.textContent = 'Submit Projector Repair Log';
-          startScanner();
+          showSuccessModal(assetNameVal, serviceTypeVal, result.loggedDate);
         } else {
           throw new Error('Submission failed');
         }
