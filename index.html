@@ -323,22 +323,27 @@
 
       <!-- Service History & Update Room Buttons -->
       <div class="action-btn-row">
-        <button type="button" id="historyBtn" class="btn-history" disabled onclick="openServiceHistory()">📋 Service History</button>
+        <button type="button" id="historyBtn" class="btn-history" disabled onclick="openServiceHistory()">📋 History</button>
         <button type="button" id="updateRoomBtn" class="btn-update-room" disabled onclick="openUpdateRoomModal()">📍 Update Room</button>
       </div>
 
       <hr style="border:0; border-top:1px solid #e5e7eb; margin:16px 0;">
 
-      <!-- Manual Entry Fields -->
+      <!-- Location & Service Entry Fields -->
       <div class="grid-2">
         <div class="field">
           <label>Room No *</label>
           <input type="text" id="roomNo" required placeholder="e.g., S-105">
         </div>
         <div class="field">
-          <label>Purchase Request</label>
-          <input type="text" id="poNo" placeholder="e.g., IT2601_006">
+          <label>Campus</label>
+          <input type="text" id="campus" readonly placeholder="Auto-filled...">
         </div>
+      </div>
+
+      <div class="field">
+        <label>Purchase Request</label>
+        <input type="text" id="poNo" placeholder="e.g., IT2601_006">
       </div>
 
       <div class="field">
@@ -502,8 +507,15 @@
           document.getElementById('model').value = data.model;
           document.getElementById('serialNo').value = data.serialNo;
 
-          currentAssetRoom = (data.roomNo && String(data.roomNo).trim() !== '') ? String(data.roomNo).trim() : 'Not assigned';
-          currentAssetCampus = (data.campusName && String(data.campusName).trim() !== '') ? String(data.campusName).trim() : 'Not assigned';
+          const fetchedRoom = (data.roomNo && String(data.roomNo).trim() !== '') ? String(data.roomNo).trim() : '';
+          const fetchedCampus = (data.campusName && String(data.campusName).trim() !== '') ? String(data.campusName).trim() : '';
+
+          // Auto-fill Room No (editable) & Campus (read-only)
+          document.getElementById('roomNo').value = fetchedRoom;
+          document.getElementById('campus').value = fetchedCampus;
+
+          currentAssetRoom = fetchedRoom !== '' ? fetchedRoom : 'Not assigned';
+          currentAssetCampus = fetchedCampus !== '' ? fetchedCampus : 'Not assigned';
 
           document.getElementById('submitBtn').disabled = false;
           document.getElementById('historyBtn').disabled = false;
@@ -513,6 +525,8 @@
           document.getElementById('brand').value = '';
           document.getElementById('model').value = '';
           document.getElementById('serialNo').value = '';
+          document.getElementById('roomNo').value = '';
+          document.getElementById('campus').value = '';
           currentAssetRoom = '-';
           currentAssetCampus = '-';
           document.getElementById('historyBtn').disabled = true;
@@ -548,6 +562,8 @@
       document.getElementById('brand').value = '';
       document.getElementById('model').value = '';
       document.getElementById('serialNo').value = '';
+      document.getElementById('roomNo').value = '';
+      document.getElementById('campus').value = '';
       currentAssetRoom = '-';
       currentAssetCampus = '-';
       hideStatus();
@@ -647,6 +663,10 @@
           currentAssetCampus = newCampusVal;
           document.getElementById('currentRoomDisplay').textContent = newRoomVal;
           document.getElementById('currentCampusDisplay').textContent = newCampusVal;
+
+          // Keep main form's Room No & Campus synced with the newly updated values
+          document.getElementById('roomNo').value = newRoomVal;
+          document.getElementById('campus').value = newCampusVal;
 
           updateBtn.textContent = 'Update';
 
@@ -762,6 +782,7 @@
         model: document.getElementById('model').value,
         serialNo: document.getElementById('serialNo').value,
         roomNo: document.getElementById('roomNo').value.trim(),
+        campus: document.getElementById('campus').value.trim(),
         poNo: document.getElementById('poNo').value.trim(),
         date: document.getElementById('date').value,
         serviceType: serviceTypeVal,
