@@ -20,6 +20,30 @@
     button { width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 8px; }
     button:disabled { background: #93c5fd; cursor: not-allowed; }
     .btn-secondary { background: #4b5563; margin-bottom: 12px; }
+
+    /* Asset Name + Manual Button Row */
+    .asset-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .asset-input-row input {
+      flex: 1;
+      min-width: 0;
+    }
+    .btn-manual {
+      width: auto;
+      margin-top: 0;
+      padding: 0 14px;
+      background: #4f46e5;
+      font-size: 0.92rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-manual:hover {
+      background: #4338ca;
+    }
+
     .action-btn-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -109,6 +133,51 @@
     }
     .modal-close-btn:hover {
       background: #15803d;
+    }
+
+    /* Manual Entry Prefix Input Group */
+    .prefix-input-group {
+      display: flex;
+      align-items: stretch;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .prefix-input-group:focus-within {
+      border-color: #4f46e5;
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
+    }
+    .prefix-badge {
+      background: #e5e7eb;
+      color: #1f2937;
+      font-weight: 700;
+      font-size: 1rem;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      border-right: 1px solid #d1d5db;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .prefix-input-group input {
+      border: none;
+      border-radius: 0;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    .prefix-input-group input:focus {
+      outline: none;
+    }
+    .manual-error-text {
+      color: #991b1b;
+      font-size: 0.82rem;
+      margin-top: 6px;
+      display: none;
+    }
+    .btn-manual-ok {
+      background: #4f46e5;
+      margin-top: 0;
     }
 
     /* Scrollable Service History Dialog */
@@ -302,7 +371,10 @@
       <!-- Auto-filled & Locked Fields from Asset_ID Sheet -->
       <div class="field">
         <label>Asset Name (From QR)</label>
-        <input type="text" id="assetName" readonly required placeholder="Scan projector QR above...">
+        <div class="asset-input-row">
+          <input type="text" id="assetName" readonly required placeholder="Scan projector QR above...">
+          <button type="button" id="manualBtn" class="btn-manual" onclick="openManualModal()">⌨️ Manual</button>
+        </div>
       </div>
 
       <div class="grid-2">
@@ -376,6 +448,41 @@
 
       <button type="submit" id="submitBtn" disabled>Submit</button>
     </form>
+  </div>
+
+  <!-- Manual Asset Entry Pop-up Dialog -->
+  <div id="manualModal" class="modal-overlay">
+    <div class="room-modal-box">
+      <div class="history-header">
+        <h3>Manual Asset Lookup</h3>
+        <div class="history-subtitle">Enter the 3-digit projector number</div>
+      </div>
+      <div class="room-modal-body">
+        <form id="manualEntryForm">
+          <div class="field">
+            <label>Projector ID *</label>
+            <div class="prefix-input-group">
+              <span class="prefix-badge">MCTA-IT PROJ_</span>
+              <input
+                type="text"
+                id="manualDigitsInput"
+                inputmode="numeric"
+                maxlength="3"
+                placeholder="001"
+                autocomplete="off"
+                oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 3)"
+              >
+            </div>
+            <div id="manualErrorMsg" class="manual-error-text">Please enter exactly 3 digits (e.g., 001).</div>
+          </div>
+
+          <div class="room-btn-row">
+            <button type="button" class="btn-room-cancel" onclick="closeManualModal()">Close</button>
+            <button type="submit" class="btn-manual-ok">OK</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
   <!-- Success Confirmation Pop-up Modal -->
@@ -453,6 +560,7 @@
 
   <script>
     const WEBHOOK_URL = 'https://hook.us2.make.com/g1i8uavahn4fa5e8588vhmyztve237l4';
+    const ASSET_PREFIX = 'MCTA-IT PROJ_';
     let html5QrCode;
     let isProcessingScan = false;
     let currentAssetRoom = '-';
@@ -477,11 +585,11 @@
       box.className = 'status';
     }
 
-    async function onScanSuccess(decodedText) {
+    async function lookupAsset(assetCode) {
       if (isProcessingScan) return;
       isProcessingScan = true;
 
-      const scannedAssetName = decodedText.trim();
+      const scannedAssetName = assetCode.trim();
       try {
         await html5QrCode.stop();
       } catch (e) {}
@@ -538,6 +646,40 @@
         isProcessingScan = false;
       }
     }
+
+    function onScanSuccess(decodedText) {
+      lookupAsset(decodedText);
+    }
+
+    function openManualModal() {
+      const input = document.getElementById('manualDigitsInput');
+      const errorMsg = document.getElementById('manualErrorMsg');
+      input.value = '';
+      errorMsg.style.display = 'none';
+      document.getElementById('manualModal').style.display = 'flex';
+      setTimeout(() => input.focus(), 50);
+    }
+
+    function closeManualModal() {
+      document.getElementById('manualModal').style.display = 'none';
+    }
+
+    document.getElementById('manualEntryForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const digits = document.getElementById('manualDigitsInput').value.trim();
+      const errorMsg = document.getElementById('manualErrorMsg');
+
+      if (!/^\d{3}$/.test(digits)) {
+        errorMsg.style.display = 'block';
+        document.getElementById('manualDigitsInput').focus();
+        return;
+      }
+
+      errorMsg.style.display = 'none';
+      const combinedAssetName = `${ASSET_PREFIX}${digits}`;
+      closeManualModal();
+      lookupAsset(combinedAssetName);
+    });
 
     function startScanner() {
       isProcessingScan = false;
@@ -639,7 +781,6 @@
       const newRoomVal = document.getElementById('newRoomInput').value.trim();
       const newCampusVal = document.getElementById('newCampusSelect').value;
 
-      // Build relocation history log string before overwriting current room/campus
       const oldRoomStr = (currentAssetRoom && currentAssetRoom !== 'Not assigned' && currentAssetRoom !== '-')
         ? currentAssetRoom
         : 'Unassigned';
