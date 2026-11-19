@@ -10,7 +10,7 @@
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; margin: 0; padding: 16px; color: #1f2937; }
     .card { max-width: 480px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
     h2 { margin-top: 0; font-size: 1.25rem; color: #0f172a; }
-    #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+    #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 16px; display: none; }
     .field { margin-bottom: 14px; }
     label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; color: #374151; }
     .hint { font-weight: 400; color: #6b7280; font-size: 0.78rem; }
@@ -20,6 +20,8 @@
     button { width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 8px; }
     button:disabled { background: #93c5fd; cursor: not-allowed; }
     .btn-secondary { background: #4b5563; margin-bottom: 12px; }
+    .btn-native-scan { background: #0284c7; margin-top: 0; margin-bottom: 14px; display: none; }
+    .btn-native-scan:hover { background: #0369a1; }
 
     /* Asset Name + Manual Button Row */
     .asset-input-row {
@@ -364,6 +366,10 @@
     <h2>Projector Repair Log</h2>
     <div id="statusBox" class="status"></div>
 
+    <!-- Telegram Native QR Scanner Button (Zero Permission Prompts) -->
+    <button type="button" id="nativeScanBtn" class="btn-native-scan" onclick="openTelegramQrScanner()">📷 Scan Projector QR</button>
+
+    <!-- Fallback Browser QR Reader -->
     <div id="reader"></div>
     <button type="button" id="rescanBtn" class="btn-secondary" style="display:none;" onclick="resetAndScan()">Scan Another QR</button>
 
@@ -373,7 +379,7 @@
         <label>Asset Name (From QR)</label>
         <div class="asset-input-row">
           <input type="text" id="assetName" readonly required placeholder="Scan projector QR above...">
-          <button type="button" id="manualBtn" class="btn-manual" onclick="openManualModal()">Manual</button>
+          <button type="button" id="manualBtn" class="btn-manual" onclick="openManualModal()">⌨️ Manual</button>
         </div>
       </div>
 
@@ -573,6 +579,13 @@
       window.Telegram.WebApp.expand();
     }
 
+    function canUseTelegramNativeScanner() {
+      const tg = window.Telegram && window.Telegram.WebApp;
+      if (!tg || typeof tg.showScanQrPopup !== 'function') return false;
+      const platform = (tg.platform || '').toLowerCase();
+      return platform === 'android' || platform === 'ios';
+    }
+
     function showStatus(msg, type) {
       const box = document.getElementById('statusBox');
       box.textContent = msg;
@@ -591,11 +604,17 @@
 
       const scannedAssetName = assetCode.trim();
       try {
-        await html5QrCode.stop();
+        if (html5QrCode) await html5QrCode.stop();
       } catch (e) {}
 
-      document.getElementById('reader').style.display = 'none';
-      document.getElementById('rescanBtn').style.display = 'block';
+      if (canUseTelegramNativeScanner()) {
+        const nativeBtn = document.getElementById('nativeScanBtn');
+        nativeBtn.style.display = 'block';
+        nativeBtn.textContent = '📷 Scan Another QR';
+      } else {
+        document.getElementById('reader').style.display = 'none';
+        document.getElementById('rescanBtn').style.display = 'block';
+      }
 
       document.getElementById('assetName').value = scannedAssetName;
       showStatus(`Matching "${scannedAssetName}" in Asset_ID sheet...`, 'info');
@@ -651,6 +670,21 @@
       lookupAsset(decodedText);
     }
 
+    function openTelegramQrScanner() {
+      if (isProcessingScan) return;
+      const tg = window.Telegram.WebApp;
+      tg.showScanQrPopup({ text: 'Point camera at projector QR' }, function (scannedText) {
+        if (scannedText && scannedText.trim() !== '') {
+          if (typeof tg.closeScanQrPopup === 'function') {
+            tg.closeScanQrPopup();
+          }
+          lookupAsset(scannedText.trim());
+          return true;
+        }
+        return false;
+      });
+    }
+
     function openManualModal() {
       const input = document.getElementById('manualDigitsInput');
       const errorMsg = document.getElementById('manualErrorMsg');
@@ -683,11 +717,23 @@
 
     function startScanner() {
       isProcessingScan = false;
-      document.getElementById('reader').style.display = 'block';
-      document.getElementById('rescanBtn').style.display = 'none';
       document.getElementById('submitBtn').disabled = true;
       document.getElementById('historyBtn').disabled = true;
       document.getElementById('updateRoomBtn').disabled = true;
+
+      if (canUseTelegramNativeScanner()) {
+        document.getElementById('reader').style.display = 'none';
+        document.getElementById('rescanBtn').style.display = 'none';
+        const nativeBtn = document.getElementById('nativeScanBtn');
+        nativeBtn.style.display = 'block';
+        nativeBtn.textContent = '📷 Scan Projector QR';
+        openTelegramQrScanner();
+        return;
+      }
+
+      document.getElementById('nativeScanBtn').style.display = 'none';
+      document.getElementById('reader').style.display = 'block';
+      document.getElementById('rescanBtn').style.display = 'none';
 
       html5QrCode = new Html5Qrcode("reader");
       html5QrCode.start(
