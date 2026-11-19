@@ -20,12 +20,22 @@
     button { width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 8px; }
     button:disabled { background: #93c5fd; cursor: not-allowed; }
     .btn-secondary { background: #4b5563; margin-bottom: 12px; }
+    .btn-history {
+      background: #0f766e;
+      margin-top: 2px;
+      margin-bottom: 4px;
+    }
+    .btn-history:disabled {
+      background: #99f6e4;
+      color: #115e59;
+      opacity: 0.65;
+    }
     .status { padding: 10px; border-radius: 8px; margin-bottom: 12px; font-size: 0.9rem; display: none; }
     .status.error { background: #fee2e2; color: #991b1b; display: block; }
     .status.success { background: #dcfce7; color: #166534; display: block; }
     .status.info { background: #e0f2fe; color: #075985; display: block; }
 
-    /* Pop-up Modal Styles (Works in Telegram Mini App & Browsers) */
+    /* Shared Pop-up Modal Overlay */
     .modal-overlay {
       position: fixed;
       inset: 0;
@@ -33,7 +43,7 @@
       display: none;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 16px;
       z-index: 9999;
     }
     .modal-box {
@@ -81,6 +91,98 @@
     .modal-close-btn:hover {
       background: #15803d;
     }
+
+    /* Scrollable Service History Dialog */
+    .history-modal-box {
+      background: #fff;
+      width: 100%;
+      max-width: 440px;
+      max-height: 82vh;
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+      animation: popIn 0.18s ease-out;
+    }
+    .history-header {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid #e5e7eb;
+      background: #f8fafc;
+    }
+    .history-header h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      color: #0f172a;
+    }
+    .history-subtitle {
+      margin: 4px 0 0;
+      font-size: 0.84rem;
+      color: #475569;
+      font-weight: 600;
+    }
+    .history-body {
+      padding: 12px 18px;
+      overflow-y: auto;
+      flex: 1;
+      text-align: left;
+    }
+    .history-empty {
+      text-align: center;
+      padding: 24px 8px;
+      color: #6b7280;
+      font-size: 0.92rem;
+    }
+    .history-row {
+      padding: 10px 0;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+    .history-row:last-child {
+      border-bottom: none;
+    }
+    .history-row-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+    .history-date {
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .history-cost {
+      font-weight: 700;
+      color: #0f766e;
+      white-space: nowrap;
+    }
+    .history-type {
+      color: #374151;
+    }
+    .history-footer {
+      padding: 12px 18px 16px;
+      border-top: 1px solid #e5e7eb;
+      background: #f8fafc;
+    }
+    .history-total-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #065f46;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+    .history-close-btn {
+      background: #334155;
+      margin-top: 0;
+    }
   </style>
 </head>
 <body>
@@ -114,6 +216,9 @@
         <input type="text" id="serialNo" readonly required>
       </div>
 
+      <!-- Service History Button -->
+      <button type="button" id="historyBtn" class="btn-history" disabled onclick="openServiceHistory()">📋 Service History</button>
+
       <hr style="border:0; border-top:1px solid #e5e7eb; margin:16px 0;">
 
       <!-- Manual Entry Fields -->
@@ -123,13 +228,13 @@
           <input type="text" id="roomNo" required placeholder="e.g., S-105">
         </div>
         <div class="field">
-          <label>PO No</label>
+          <label>Purchase Request</label>
           <input type="text" id="poNo" placeholder="e.g., IT2601_006">
         </div>
       </div>
 
       <div class="field">
-        <label>Date <span class="hint">(Leave blank for auto Myanmar time)</span></label>
+        <label>Date <span class="hint">(Myanmar Time)</span></label>
         <input type="date" id="date">
       </div>
 
@@ -156,7 +261,7 @@
         <textarea id="remark" rows="2" placeholder="Optional remarks..."></textarea>
       </div>
 
-      <button type="submit" id="submitBtn" disabled>Submit Projector Repair Log</button>
+      <button type="submit" id="submitBtn" disabled>Submit</button>
     </form>
   </div>
 
@@ -170,12 +275,29 @@
     </div>
   </div>
 
+  <!-- Service History Pop-up Dialog -->
+  <div id="historyModal" class="modal-overlay">
+    <div class="history-modal-box">
+      <div class="history-header">
+        <h3>Service History</h3>
+        <div id="historySubtitle" class="history-subtitle"></div>
+      </div>
+      <div id="historyList" class="history-body"></div>
+      <div class="history-footer">
+        <div class="history-total-bar">
+          <span id="historyCountLabel">Total Servicing Cost</span>
+          <span id="historyTotalCost">0 MMK</span>
+        </div>
+        <button type="button" class="history-close-btn" onclick="closeHistoryModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const WEBHOOK_URL = 'https://hook.us2.make.com/g1i8uavahn4fa5e8588vhmyztve237l4';
     let html5QrCode;
     let isProcessingScan = false;
 
-    // Expand Telegram Mini App to full height if opened inside Telegram
     if (window.Telegram && window.Telegram.WebApp) {
       window.Telegram.WebApp.ready();
       window.Telegram.WebApp.expand();
@@ -223,12 +345,14 @@
           document.getElementById('model').value = data.model;
           document.getElementById('serialNo').value = data.serialNo;
           document.getElementById('submitBtn').disabled = false;
-          showStatus(`Matched: ${data.assetName} (${data.brand} ${data.model})`, 'success');
+          document.getElementById('historyBtn').disabled = false;
+          showStatus(`Name: ${data.assetName} (${data.brand} ${data.model})`, 'success');
         } else {
           document.getElementById('brand').value = '';
           document.getElementById('model').value = '';
           document.getElementById('serialNo').value = '';
-          showStatus(`"${scannedAssetName}" was not found in Asset_ID sheet.`, 'error');
+          document.getElementById('historyBtn').disabled = true;
+          showStatus(`"${scannedAssetName}" was not found in Database.`, 'error');
         }
       } catch (err) {
         showStatus('Connection error. Make sure your Make.com scenario is ON.', 'error');
@@ -242,6 +366,7 @@
       document.getElementById('reader').style.display = 'block';
       document.getElementById('rescanBtn').style.display = 'none';
       document.getElementById('submitBtn').disabled = true;
+      document.getElementById('historyBtn').disabled = true;
 
       html5QrCode = new Html5Qrcode("reader");
       html5QrCode.start(
@@ -261,7 +386,8 @@
 
       const btn = document.getElementById('submitBtn');
       btn.disabled = true;
-      btn.textContent = 'Submit Projector Repair Log';
+      btn.textContent = 'Submit';
+      document.getElementById('historyBtn').disabled = true;
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
       startScanner();
@@ -276,6 +402,79 @@
     function closeSuccessModal() {
       document.getElementById('successModal').style.display = 'none';
       resetAndScan();
+    }
+
+    function closeHistoryModal() {
+      document.getElementById('historyModal').style.display = 'none';
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text ?? '';
+      return div.innerHTML;
+    }
+
+    async function openServiceHistory() {
+      const assetNameVal = document.getElementById('assetName').value.trim();
+      const brandVal = document.getElementById('brand').value.trim();
+      const modelVal = document.getElementById('model').value.trim();
+      if (!assetNameVal) return;
+
+      document.getElementById('historySubtitle').textContent = `${assetNameVal} (${brandVal} ${modelVal})`;
+      document.getElementById('historyList').innerHTML = '<div class="history-empty">Loading service history...</div>';
+      document.getElementById('historyCountLabel').textContent = 'Total Servicing Cost';
+      document.getElementById('historyTotalCost').textContent = '...';
+      document.getElementById('historyModal').style.display = 'flex';
+
+      try {
+        const body = new URLSearchParams({
+          action: 'history',
+          assetName: assetNameVal
+        });
+
+        const res = await fetch(WEBHOOK_URL, { method: 'POST', body });
+        const data = await res.json();
+        const records = Array.isArray(data.history) ? data.history : [];
+
+        if (records.length === 0) {
+          document.getElementById('historyList').innerHTML =
+            '<div class="history-empty">No previous service records found for this asset.</div>';
+          document.getElementById('historyCountLabel').textContent = 'Total Servicing Cost (0 records)';
+          document.getElementById('historyTotalCost').textContent = '0 MMK';
+          return;
+        }
+
+        let totalCost = 0;
+        const rowsHtml = records.map((item, idx) => {
+          const vals = Object.values(item);
+          const dateVal = item.date ?? item['Date (H)'] ?? vals[0] ?? '-';
+          const typeVal = item.serviceType ?? item['Service Type (I)'] ?? vals[1] ?? '-';
+          const rawCost = item.cost ?? item['Parts & Servicing Cost (MMK) (J)'] ?? vals[2] ?? 0;
+
+          const numericCost = parseFloat(String(rawCost).replace(/[^0-9.-]/g, '')) || 0;
+          totalCost += numericCost;
+          const formattedCost = numericCost > 0 ? `${numericCost.toLocaleString('en-US')} MMK` : '0 MMK';
+
+          return `
+            <div class="history-row">
+              <div class="history-row-top">
+                <span class="history-date">${idx + 1}. ${escapeHtml(String(dateVal))}</span>
+                <span class="history-cost">${escapeHtml(formattedCost)}</span>
+              </div>
+              <div class="history-type">${escapeHtml(String(typeVal))}</div>
+            </div>
+          `;
+        }).join('');
+
+        document.getElementById('historyList').innerHTML = rowsHtml;
+        document.getElementById('historyCountLabel').textContent =
+          `Total Servicing Cost (${records.length} ${records.length === 1 ? 'record' : 'records'})`;
+        document.getElementById('historyTotalCost').textContent = `${totalCost.toLocaleString('en-US')} MMK`;
+      } catch (err) {
+        document.getElementById('historyList').innerHTML =
+          '<div class="history-empty" style="color:#991b1b;">Error loading service history. Please check Make.com scenario.</div>';
+        document.getElementById('historyTotalCost').textContent = '-';
+      }
     }
 
     document.getElementById('serviceForm').addEventListener('submit', async (e) => {
@@ -306,7 +505,7 @@
         const result = await res.json();
 
         if (result.success) {
-          btn.textContent = 'Submit Projector Repair Log';
+          btn.textContent = 'Submit';
           showSuccessModal(assetNameVal, serviceTypeVal, result.loggedDate);
         } else {
           throw new Error('Submission failed');
@@ -314,7 +513,7 @@
       } catch (err) {
         showStatus('Error saving record. Please try again.', 'error');
         btn.disabled = false;
-        btn.textContent = 'Submit Projector Repair Log';
+        btn.textContent = 'Submit';
       }
     });
 
